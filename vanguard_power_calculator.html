@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vanguard Power Calculator</title>
+  <style>
+    :root {
+      --bg-color: #0b0c10;
+      --card-bg: #1f2833;
+      --vg-color: #e63946;
+      --rg-color: #ffb703;
+      --active-col: #ffb703;
+      --text-color: #edf2f4;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 10px;
+      user-select: none;
+      box-sizing: border-box;
+    }
+    .container {
+      max-width: 480px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.2rem;
+      margin: 0 0 10px;
+      color: #e63946;
+      letter-spacing: 1px;
+    }
+
+    /* 6マス フィールドGrid */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .unit-card {
+      background-color: var(--card-bg);
+      border: 2px solid #2b2d42;
+      border-radius: 8px;
+      padding: 6px;
+      box-sizing: border-box;
+      position: relative;
+      height: 148px; /* アタックボタンと数値の余白を確保するため縦幅を微増 */
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+    }
+
+    .unit-card.is-vg { border-color: var(--vg-color); }
+    .unit-card.is-rg { border-color: #b5838d; }
+
+    /* Vサークル・Rサークル背景（より鮮明で明るく表示） */
+    .unit-card.is-vg {
+      border-color: var(--vg-color);
+      background-image: linear-gradient(rgba(15,15,20,0.65), rgba(15,15,20,0.8)), 
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='none' stroke='%23ff4d6d' stroke-width='3.5' opacity='0.85'/%3E%3Cpath d='M30 30 L50 75 L70 30' fill='none' stroke='%23ff4d6d' stroke-width='8' stroke-linecap='round' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E");
+      background-size: cover;
+      background-position: center;
+    }
+
+    .unit-card.is-rg {
+      border-color: #ffb703;
+      background-image: linear-gradient(rgba(15,15,20,0.65), rgba(15,15,20,0.8)), 
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='none' stroke='%23ffb703' stroke-width='3.5' opacity='0.85'/%3E%3Cpath d='M35 30 L35 70 M35 30 L55 30 C65 30 65 50 55 50 L35 50 M50 50 L65 70' fill='none' stroke='%23ffb703' stroke-width='8' stroke-linecap='round' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E");
+      background-size: cover;
+      background-position: center;
+    }
+
+    .unit-card.is-attacker {
+      border-color: var(--active-col) !important;
+      box-shadow: 0 0 12px rgba(255, 183, 3, 0.6), inset 0 0 15px rgba(255, 183, 3, 0.2);
+    }
+
+    /* ヴァンガード枠がアタッカーの時は発光色・枠線を赤色に保つ */
+    .unit-card.is-vg.is-attacker {
+      border-color: var(--vg-color) !important;
+      box-shadow: 0 0 12px rgba(230, 57, 70, 0.8), inset 0 0 15px rgba(230, 57, 70, 0.3);
+    }
+
+    /* カード上部アクション */
+    .card-top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+      height: 28px; /* アタック・ブーストボタン用の高さを拡張 */
+    }
+    .btn-attack-select {
+      background: #2b2d42;
+      color: #8d99ae;
+      border: 1px solid #457b9d;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: bold;
+      padding: 4px 6px;
+      cursor: pointer;
+    }
+    /* 前列のアタックボタンを2行分の高さに揃える */
+    .unit-card:not(:has(.btn-boost-toggle)) .btn-attack-select {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-attack-select.active {
+      background: var(--active-col);
+      color: #000;
+      border-color: #fff;
+    }
+
+    .btn-boost-toggle {
+      background: #38b000;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: bold;
+      padding: 4px 6px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .btn-boost-toggle.off {
+      background: #4a4e69;
+      color: #a0a0a0;
+    }
+
+    /* パワー表示領域 */
+    .card-power-area {
+      cursor: pointer;
+      padding: 4px 0; /* 上下のパディングを少し増やして数字とボタンの距離を維持 */
+      text-align: center;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .card-power-display {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.1;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .card-buff-display {
+      font-size: 0.65rem;
+      color: #ffda6a;
+      font-weight: bold;
+      min-height: 0.8em;
+    }
+
+    /* アクション下部（2行配置） */
+    .card-actions-col {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .btn-quick-add {
+      background: #2b2d42;
+      color: #ffda6a;
+      border: 1px solid #457b9d;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      padding: 3px 0;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-quick-add:active {
+      background: #457b9d;
+      color: #fff;
+    }
+
+    .crit-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
+      padding: 2px 4px;
+    }
+    .btn-crit {
+      background: #457b9d;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: bold;
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .crit-display {
+      font-size: 0.75rem;
+      font-weight: bold;
+      color: #ff4d6d;
+    }
+
+    /* 一括リセットエリア */
+    .global-resets {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .btn-global-reset {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 0.8rem;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .btn-buff-reset { background: #3a0ca3; color: #fff; }
+    .btn-all-reset { background: #7209b7; color: #fff; }
+
+    /* 防御設定 */
+    .defender-box {
+      background: #111420;
+      border: 1px solid #2b2d42;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+    }
+    .defender-title {
+      font-size: 0.85rem;
+      font-weight: bold;
+      margin-bottom: 0;
+      color: #48cae4;
+    }
+
+    /* 結果パネル */
+    .result-panel {
+      background: linear-gradient(135deg, #1d3557, #2b2d42);
+      border: 1px solid #457b9d;
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .attack-power-total {
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #ffda6a;
+      line-height: 1.1;
+      text-shadow: 0 0 10px rgba(255, 218, 106, 0.3);
+    }
+
+    /* ダイアログ */
+    dialog {
+      background: #1f2833;
+      color: #fff;
+      border: 2px solid #457b9d;
+      border-radius: 12px;
+      padding: 16px;
+      width: 85%;
+      max-width: 300px;
+    }
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.75);
+    }
+    .dialog-title {
+      font-size: 0.95rem;
+      font-weight: bold;
+      margin-bottom: 12px;
+      text-align: center;
+      color: var(--active-col);
+      outline: none;
+    }
+    .dialog-grid-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .modal-btn {
+      padding: 10px 0;
+      font-size: 0.8rem;
+      font-weight: bold;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-step { background: #2b2d42; color: #fff; border: 1px solid #457b9d; }
+    .btn-modal-reset { background: #6c757d; color: #fff; }
+    .btn-close { background: var(--active-col); color: #000; width: 100%; margin-top: 10px; padding: 10px 0; font-weight: bold; border: none; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>⚔️ Vanguard Power Calculator</h1>
+
+  <!-- 統合された防御・ガード値枠（上部に移動） -->
+  <div class="defender-box" style="background: linear-gradient(135deg, #1d3557, #111420); border: 1px solid #457b9d; margin-bottom: 12px; padding: 10px;">
+    <!-- 上段：アタックパワーと防御合計の横並び表示 -->
+    <div style="display: flex; justify-content: space-around; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 8px;">
+      <div style="text-align: center;">
+        <div style="font-size: 0.7rem; color: #8d99ae;">アタックパワー</div>
+        <div class="attack-power-total" id="total-attack-power" style="font-size: 1.2rem;">0</div>
+      </div>
+      <div style="text-align: center;">
+        <div style="font-size: 0.7rem; color: #8d99ae;">防御ユニット合計</div>
+        <div class="attack-power-total" id="def-total-val" style="color: #ffda6a; font-size: 1.2rem;">13,000</div>
+      </div>
+    </div>
+
+    <!-- 中段：必要ガード値（大きく表示） -->
+    <div style="text-align: center; margin-bottom: 10px; padding: 4px 0; background: rgba(0,0,0,0.2); border-radius: 6px;">
+      <div style="font-size: 0.75rem; color: #48cae4; font-weight: bold;">必要ガード値</div>
+      <div class="attack-power-total" id="guard-req-val" style="color: #48cae4; font-size: 2.2rem; margin-top: 2px;">0</div>
+    </div>
+
+    <!-- 下段：防御ユニット設定 -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <div class="defender-title">🛡️ 防御ユニット設定</div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+      <div>
+        <label style="font-size:0.7rem; color:#8d99ae;">基本パワー</label>
+        <div style="display: flex; gap: 3px; align-items: center; margin-top: 2px;">
+          <button type="button" class="modal-btn btn-step" style="width: 30px; padding: 6px 0; font-size: 0.9rem; shrink: 0;" onclick="changeDefBase(-1000)">-</button>
+          <input type="number" id="def-target-power" value="13000" step="1000" style="width: 100%; min-width: 0; padding: 6px 2px; font-size: 0.85rem; border-radius: 4px; background: #0b0c10; color: #fff; border: 1px solid #2b2d42; box-sizing: border-box; text-align: center;" oninput="calculate()">
+          <button type="button" class="modal-btn btn-step" style="width: 30px; padding: 6px 0; font-size: 0.9rem; shrink: 0;" onclick="changeDefBase(1000)">+</button>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:0.7rem; color:#8d99ae;">修正値</label>
+        <div style="display: flex; gap: 3px; align-items: center; margin-top: 2px;">
+          <button type="button" class="modal-btn btn-step" style="width: 30px; padding: 6px 0; font-size: 0.9rem; shrink: 0;" onclick="changeDefShield(-1000)">-</button>
+          <input type="number" id="def-shield" value="0" step="5000" style="width: 100%; min-width: 0; padding: 6px 2px; font-size: 0.85rem; border-radius: 4px; background: #0b0c10; color: #ffda6a; border: 1px solid #2b2d42; box-sizing: border-box; text-align: center; font-weight: bold;" oninput="calculate()">
+          <button type="button" class="modal-btn btn-step" style="width: 30px; padding: 6px 0; font-size: 0.9rem; shrink: 0;" onclick="changeDefShield(1000)">+</button>
+        </div>
+      </div>
+    </div>
+    <!-- 防御修正値 簡易操作ボタン -->
+    <div style="display: flex; gap: 6px; margin-top: 6px;">
+      <button type="button" class="modal-btn btn-step" style="flex: 1; padding: 6px 0; font-size: 0.72rem;" onclick="addDefShieldQuick(10000)">+10,000</button>
+      <button type="button" class="modal-btn btn-step" style="flex: 1; padding: 6px 0; font-size: 0.72rem;" onclick="addDefShieldQuick(100000000)">+1億</button>
+      <button type="button" class="modal-btn btn-modal-reset" style="flex: 1; padding: 6px 0; font-size: 0.72rem;" onclick="resetDefShield()">リセット</button>
+    </div>
+  </div>
+
+  <!-- 6マス フィールドGrid -->
+  <div class="field-grid">
+    <!-- 前列左 (R) -->
+    <div class="unit-card is-rg" id="card-fl">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-fl" onclick="setAttacker('fl')">アタック</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('fl')">
+        <div class="card-power-display" id="display-fl">0</div>
+        <div class="card-buff-display" id="buff-disp-fl"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('fl', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('fl', -1)">-</button>
+          <span class="crit-display" id="crit-disp-fl">★1</span>
+          <button class="btn-crit" onclick="addCrit('fl', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 前列中央 (V) -->
+    <div class="unit-card is-vg" id="card-fc">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-fc" onclick="setAttacker('fc')">アタック</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('fc')">
+        <div class="card-power-display" id="display-fc">13,000</div>
+        <div class="card-buff-display" id="buff-disp-fc"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('fc', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('fc', -1)">-</button>
+          <span class="crit-display" id="crit-disp-fc">★1</span>
+          <button class="btn-crit" onclick="addCrit('fc', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 前列右 (R) -->
+    <div class="unit-card is-rg" id="card-fr">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-fr" onclick="setAttacker('fr')">アタック</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('fr')">
+        <div class="card-power-display" id="display-fr">0</div>
+        <div class="card-buff-display" id="buff-disp-fr"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('fr', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('fr', -1)">-</button>
+          <span class="crit-display" id="crit-disp-fr">★1</span>
+          <button class="btn-crit" onclick="addCrit('fr', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 後列左 -->
+    <div class="unit-card is-rg" id="card-bl">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-bl" onclick="setAttacker('bl')">アタック</button>
+        <button class="btn-boost-toggle" id="boost-btn-bl" onclick="toggleBoost('bl')">ブーストON</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('bl')">
+        <div class="card-power-display" id="display-bl">0</div>
+        <div class="card-buff-display" id="buff-disp-bl"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('bl', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('bl', -1)">-</button>
+          <span class="crit-display" id="crit-disp-bl">★1</span>
+          <button class="btn-crit" onclick="addCrit('bl', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 後列中央 -->
+    <div class="unit-card is-rg" id="card-bc">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-bc" onclick="setAttacker('bc')">アタック</button>
+        <button class="btn-boost-toggle" id="boost-btn-bc" onclick="toggleBoost('bc')">ブーストON</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('bc')">
+        <div class="card-power-display" id="display-bc">0</div>
+        <div class="card-buff-display" id="buff-disp-bc"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('bc', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('bc', -1)">-</button>
+          <span class="crit-display" id="crit-disp-bc">★1</span>
+          <button class="btn-crit" onclick="addCrit('bc', 1)">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 後列右 -->
+    <div class="unit-card is-rg" id="card-br">
+      <div class="card-top-bar">
+        <button class="btn-attack-select" id="att-btn-br" onclick="setAttacker('br')">アタック</button>
+        <button class="btn-boost-toggle" id="boost-btn-br" onclick="toggleBoost('br')">ブーストON</button>
+      </div>
+      <div class="card-power-area" onclick="openModal('br')">
+        <div class="card-power-display" id="display-br">0</div>
+        <div class="card-buff-display" id="buff-disp-br"></div>
+      </div>
+      <div class="card-actions-col">
+        <button class="btn-quick-add" onclick="addBuffQuick('br', 5000)">+5000</button>
+        <div class="crit-row">
+          <button class="btn-crit" onclick="addCrit('br', -1)">-</button>
+          <span class="crit-display" id="crit-disp-br">★1</span>
+          <button class="btn-crit" onclick="addCrit('br', 1)">+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 一括リセットエリア -->
+  <div class="global-resets">
+    <button class="btn-global-reset btn-buff-reset" onclick="resetAllBuffs()">修正値リセット</button>
+    <button class="btn-global-reset btn-all-reset" onclick="resetEverything()">全リセット</button>
+  </div>
+</div>
+
+<!-- ユニット設定モーダル -->
+<dialog id="unit-modal">
+  <div class="dialog-title" id="modal-title" tabindex="-1">ユニット設定</div>
+  <div style="margin-bottom: 10px;">
+    <label style="font-size: 0.75rem; color: #8d99ae;">基本パワー</label>
+    <div style="display: flex; gap: 4px; align-items: center; margin-top: 2px;">
+      <button type="button" class="modal-btn btn-step" style="width: 32px; padding: 6px 0;" onclick="changeModalBase(-1000)">-</button>
+      <input type="number" id="modal-base-power" step="1000" style="width: 100%; padding: 8px; font-size: 0.9rem; border-radius: 6px; background: #0b0c10; color: #fff; border: 1px solid #2b2d42; box-sizing: border-box; text-align: center;">
+      <button type="button" class="modal-btn btn-step" style="width: 32px; padding: 6px 0;" onclick="changeModalBase(1000)">+</button>
+    </div>
+    <!-- 8000 / 10000 / 13000 設定ボタン -->
+    <div style="display: flex; gap: 4px; margin-top: 6px;">
+      <button type="button" class="modal-btn btn-step" style="flex: 1; padding: 4px 0; font-size: 0.7rem;" onclick="setModalBase(8000)">8000</button>
+      <button type="button" class="modal-btn btn-step" style="flex: 1; padding: 4px 0; font-size: 0.7rem;" onclick="setModalBase(10000)">10000</button>
+      <button type="button" class="modal-btn btn-step" style="flex: 1; padding: 4px 0; font-size: 0.7rem;" onclick="setModalBase(13000)">13000</button>
+    </div>
+  </div>
+  <div style="margin-bottom: 10px;">
+    <label style="font-size: 0.75rem; color: #8d99ae;">修正値 (パンプ)</label>
+    <div style="display: flex; gap: 4px; align-items: center; margin-top: 2px;">
+      <button type="button" class="modal-btn btn-step" style="width: 32px; padding: 6px 0;" onclick="changeModalBuff(-1000)">-</button>
+      <input type="number" id="modal-buff-power" step="5000" style="width: 100%; padding: 8px; font-size: 0.9rem; border-radius: 6px; background: #0b0c10; color: #ffda6a; border: 1px solid #2b2d42; box-sizing: border-box; text-align: center; font-weight: bold;">
+      <button type="button" class="modal-btn btn-step" style="width: 32px; padding: 6px 0;" onclick="changeModalBuff(1000)">+</button>
+    </div>
+  </div>
+
+  <div class="dialog-grid-btns">
+    <button class="modal-btn btn-step" onclick="addModalBuff(5000)">+5000</button>
+    <button class="modal-btn btn-step" onclick="addModalBuff(10000)">+10000</button>
+    <button class="modal-btn btn-step" onclick="addModalBuff(100000000)">超トリガー (+1億)</button>
+    <button class="modal-btn btn-modal-reset" onclick="resetModalBuff()">修正値リセット</button>
+  </div>
+
+  <button class="btn-close" onclick="closeModal()">閉じる</button>
+</dialog>
+
+<script>
+  // ユニット状態のデータ定義
+  const units = {
+    fl: { base: 0, buff: 0, crit: 1, isAttacker: false },
+    fc: { base: 13000, buff: 0, crit: 1, isAttacker: true }, // 初期設定: Vアタック
+    fr: { base: 0, buff: 0, crit: 1, isAttacker: false },
+    bl: { base: 0, buff: 0, crit: 1, isAttacker: false, isBoosting: false },
+    bc: { base: 0, buff: 0, crit: 1, isAttacker: false, isBoosting: false },
+    br: { base: 0, buff: 0, crit: 1, isAttacker: false, isBoosting: false }
+  };
+
+  let currentModalUnitId = null;
+
+  // アタッカーの変更
+  function setAttacker(id) {
+    Object.keys(units).forEach(key => {
+      units[key].isAttacker = (key === id);
+    });
+    updateUI();
+  }
+
+  // ブーストのON/OFF切り替え
+  function toggleBoost(id) {
+    if (units[id].isBoosting !== undefined) {
+      units[id].isBoosting = !units[id].isBoosting;
+      updateUI();
+    }
+  }
+
+  // クリティカル調整
+  function addCrit(id, delta) {
+    units[id].crit = Math.max(0, units[id].crit + delta);
+    updateUI();
+  }
+
+  // カードからのクイックパンプ(+5000)
+  function addBuffQuick(id, val) {
+    units[id].buff += val;
+    updateUI();
+  }
+
+  // 全ユニット修正値リセット
+  function resetAllBuffs() {
+    Object.keys(units).forEach(key => {
+      units[key].buff = 0;
+    });
+    updateUI();
+  }
+
+  // 全リセット
+  function resetEverything() {
+    Object.keys(units).forEach(key => {
+      units[key].base = (key === 'fc') ? 13000 : 0;
+      units[key].buff = 0;
+      units[key].crit = 1;
+      units[key].isAttacker = (key === 'fc');
+      if (units[key].isBoosting !== undefined) {
+        units[key].isBoosting = false;
+      }
+    });
+    document.getElementById('def-target-power').value = 13000;
+    document.getElementById('def-shield').value = 0;
+    updateUI();
+  }
+
+  // 防御側の操作
+  function changeDefBase(delta) {
+    const input = document.getElementById('def-target-power');
+    input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+    calculate();
+  }
+
+  function changeDefShield(delta) {
+    const input = document.getElementById('def-shield');
+    input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+    calculate();
+  }
+
+  function addDefShieldQuick(val) {
+    const input = document.getElementById('def-shield');
+    input.value = (parseInt(input.value) || 0) + val;
+    calculate();
+  }
+
+  function resetDefShield() {
+    document.getElementById('def-shield').value = 0;
+    calculate();
+  }
+
+  // モーダル（ダイアログ）関連
+  function openModal(id) {
+    currentModalUnitId = id;
+    const u = units[id];
+    document.getElementById('modal-base-power').value = u.base;
+    document.getElementById('modal-buff-power').value = u.buff;
+
+    const modal = document.getElementById('unit-modal');
+    modal.showModal();
+    // フォーカス解除で自動選択を防ぐ
+    document.getElementById('modal-title').focus();
+    document.getElementById('modal-title').blur();
+  }
+
+  function closeModal() {
+    if (currentModalUnitId) {
+      const baseVal = parseInt(document.getElementById('modal-base-power').value) || 0;
+      const buffVal = parseInt(document.getElementById('modal-buff-power').value) || 0;
+      units[currentModalUnitId].base = Math.max(0, baseVal);
+      units[currentModalUnitId].buff = buffVal;
+      updateUI();
+    }
+    document.getElementById('unit-modal').close();
+    currentModalUnitId = null;
+  }
+
+  function changeModalBase(delta) {
+    const input = document.getElementById('modal-base-power');
+    input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+  }
+
+  function setModalBase(val) {
+    document.getElementById('modal-base-power').value = val;
+  }
+
+  function changeModalBuff(delta) {
+    const input = document.getElementById('modal-buff-power');
+    input.value = (parseInt(input.value) || 0) + delta;
+  }
+
+  function addModalBuff(val) {
+    const input = document.getElementById('modal-buff-power');
+    input.value = (parseInt(input.value) || 0) + val;
+  }
+
+  function resetModalBuff() {
+    document.getElementById('modal-buff-power').value = 0;
+  }
+
+  // 表示の全更新
+  function updateUI() {
+    Object.keys(units).forEach(id => {
+      const u = units[id];
+      const card = document.getElementById(`card-${id}`);
+      const disp = document.getElementById(`display-${id}`);
+      const buffDisp = document.getElementById(`buff-disp-${id}`);
+      const critDisp = document.getElementById(`crit-disp-${id}`);
+      const attBtn = document.getElementById(`att-btn-${id}`);
+      const boostBtn = document.getElementById(`boost-btn-${id}`);
+
+      // パワー表示
+      const totalPower = u.base + u.buff;
+      disp.innerText = totalPower.toLocaleString();
+
+      // パンプ表示
+      if (u.buff > 0) {
+        buffDisp.innerText = `(+${u.buff.toLocaleString()})`;
+      } else if (u.buff < 0) {
+        buffDisp.innerText = `(${u.buff.toLocaleString()})`;
+      } else {
+        buffDisp.innerText = '';
+      }
+
+      // クリティカル表示
+      if (critDisp) {
+        critDisp.innerText = `★${u.crit}`;
+      }
+
+      // アタッカー強調
+      if (u.isAttacker) {
+        card.classList.add('is-attacker');
+        if (attBtn) attBtn.classList.add('active');
+      } else {
+        card.classList.remove('is-attacker');
+        if (attBtn) attBtn.classList.remove('active');
+      }
+
+      // ブーストON/OFFボタン
+      if (boostBtn) {
+        if (u.isBoosting) {
+          boostBtn.classList.remove('off');
+          boostBtn.innerText = 'ブーストON';
+        } else {
+          boostBtn.classList.add('off');
+          boostBtn.innerText = 'ブーストOFF';
+        }
+      }
+    });
+
+    calculate();
+  }
+
+  // パワーおよび必要ガード値の計算
+  function calculate() {
+    let attackerKey = null;
+    Object.keys(units).forEach(key => {
+      if (units[key].isAttacker) attackerKey = key;
+    });
+
+    let attackPower = 0;
+    if (attackerKey) {
+      // 攻撃ユニットのパワー
+      attackPower += (units[attackerKey].base + units[attackerKey].buff);
+
+      // 対応する後列のブースト判定（左列:fl<->bl, 中央:fc<->bc, 右列:fr<->br）
+      const backPairMap = { fl: 'bl', fc: 'bc', fr: 'br', bl: 'fl', bc: 'fc', br: 'fr' };
+      const partnerKey = backPairMap[attackerKey];
+
+      // パートナーが存在し、後列かつブーストONの場合
+      if (partnerKey && units[partnerKey] && units[partnerKey].isBoosting) {
+        attackPower += (units[partnerKey].base + units[partnerKey].buff);
+      }
+    }
+
+    document.getElementById('total-attack-power').innerText = attackPower.toLocaleString();
+
+    // 防御パワー計算
+    const defBase = parseInt(document.getElementById('def-target-power').value) || 0;
+    const defShield = parseInt(document.getElementById('def-shield').value) || 0;
+    const defTotal = defBase + defShield;
+
+    document.getElementById('def-total-val').innerText = defTotal.toLocaleString();
+
+    // ガード値計算 (アタックパワーを超過するために必要な5000刻みの値)
+    let reqGuard = 0;
+    if (attackPower >= defTotal) {
+      const diff = attackPower - defTotal;
+      // 同値以上でアタック成功のため、ガード成功には (差額 + 1) を超える5000の倍数が必要
+      reqGuard = Math.ceil((diff + 1) / 5000) * 5000;
+    }
+
+    document.getElementById('guard-req-val').innerText = reqGuard.toLocaleString();
+  }
+
+  // 初期化実行
+  window.onload = function() {
+    updateUI();
+  };
+</script>
+</body>
+</html>

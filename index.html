@@ -295,6 +295,16 @@
       color: #48cae4;
     }
 
+    /* input[type="number"] の上下矢印（スピンボタン）を非表示化 */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
     /* 結果パネル */
     .result-panel {
       background: linear-gradient(135deg, #1d3557, #2b2d42);
